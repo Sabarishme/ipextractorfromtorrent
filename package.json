@@ -1,0 +1,1 @@
+﻿{"name":"vercel-torrent-scraper","version":"1.0.0","private":true,"type":"module","dependencies":{"parse-torrent":"^11.0.1","bittorrent-tracker":"^11.0.0"}}

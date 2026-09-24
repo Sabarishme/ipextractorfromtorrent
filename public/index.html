@@ -1,0 +1,111 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Torrent Tracker IP Scraper</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #f8fafc; padding: 2rem; max-width: 800px; margin: auto; }
+    h2 { border-bottom: 2px solid #334155; padding-bottom: 8px; }
+    #dropzone { border: 2px dashed #38bdf8; padding: 40px; text-align: center; border-radius: 12px; cursor: pointer; transition: 0.2s; background: #1e293b; }
+    #dropzone.hover { background: #0284c7; color: #fff; }
+    .card { background: #1e293b; border: 1px solid #334155; padding: 16px; border-radius: 8px; margin-top: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #334155; font-family: monospace; }
+    th { color: #38bdf8; }
+    .status { font-style: italic; color: #94a3b8; }
+  </style>
+</head>
+<body>
+
+  <h2>Torrent HTTP Tracker IP Scraper</h2>
+  <div id="dropzone">Drag & Drop your <strong>.torrent</strong> file here</div>
+
+  <div id="results" style="display:none;">
+    <div class="card">
+      <h3 id="torrent-name" style="margin-top:0; color:#38bdf8;">--</h3>
+      <p><strong>InfoHash:</strong> <span id="info-hash" style="font-family:monospace;">--</span></p>
+      <p class="status" id="status-msg"></p>
+    </div>
+
+    <div class="card">
+      <h3>Active Peers Discovered (<span id="peer-count">0</span>)</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>IP Address</th>
+            <th>Port</th>
+          </tr>
+        </thead>
+        <tbody id="peer-table-body">
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const dropzone = document.getElementById('dropzone');
+    const results = document.getElementById('results');
+    const torrentName = document.getElementById('torrent-name');
+    const infoHash = document.getElementById('info-hash');
+    const statusMsg = document.getElementById('status-msg');
+    const peerCount = document.getElementById('peer-count');
+    const peerTableBody = document.getElementById('peer-table-body');
+
+    dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('hover'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('hover'));
+
+    dropzone.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('hover');
+
+      const file = e.dataTransfer.files[0];
+      if (!file || !file.name.endsWith('.torrent')) {
+        alert('Please select a valid .torrent file.');
+        return;
+      }
+
+      results.style.display = 'block';
+      torrentName.textContent = file.name;
+      infoHash.textContent = 'Parsing...';
+      statusMsg.textContent = 'Scraping HTTP trackers for connected peer IPs... (takes ~5s)';
+      peerTableBody.innerHTML = '';
+      peerCount.textContent = '0';
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const response = await fetch('/api/parse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-bittorrent' },
+          body: arrayBuffer
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+          statusMsg.textContent = 'Error: ' + data.error;
+          return;
+        }
+
+        infoHash.textContent = data.infoHash;
+        statusMsg.textContent = data.message || `Successfully scraped HTTP trackers.`;
+        peerCount.textContent = data.peers.length;
+
+        if (data.peers.length === 0) {
+          peerTableBody.innerHTML = '<tr><td colspan="2">No HTTP peers discovered. Most swarm peers may be connected over UDP trackers/DHT.</td></tr>';
+          return;
+        }
+
+        data.peers.forEach(peer => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${peer.ip}</td><td>${peer.port}</td>`;
+          peerTableBody.appendChild(tr);
+        });
+
+      } catch (err) {
+        statusMsg.textContent = 'Failed to execute query: ' + err.message;
+      }
+    });
+  </script>
+</body>
+</html>
